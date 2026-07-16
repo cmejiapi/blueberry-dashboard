@@ -2433,7 +2433,7 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxs1G5UnTMRazvu
 // ██ BOTÓN COMERCIAL — Página web de Blueberry AI Export ██
 // Cambia SOLO esta URL para actualizar el destino de AMBOS botones comerciales
 // (header "Contactar con Blueberry AI" y tarjeta "Ir al Centro de Atención" en la pestaña General).
-const BLUEBERRY_COMMERCIAL_URL = 'URL_PAGINA_WEB';
+const BLUEBERRY_COMMERCIAL_URL = 'https://script.google.com/macros/s/AKfycbw3xevpFor7rEjkVZbn9xNOAABfWHsAvVt4n7oWy2lxzH7HyohTLt8kc_MkuK4dTFPOZA/exec';
 function openBlueberryCommercialSite(){
   window.open(BLUEBERRY_COMMERCIAL_URL, '_blank', 'noopener,noreferrer');
 }
@@ -4423,80 +4423,108 @@ function pushIA(icon,agent,col,msg){
 }
 
 function applySheetData(key, d) {
+  // ── Helpers internos de formato (solo viven dentro de applySheetData, no afectan a otras funciones) ──
+  function fmtFecha(v){
+    if(v==null || v==='') return '';
+    const dt = new Date(v);
+    if(isNaN(dt.getTime())) return String(v);
+    const fecha = dt.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
+    const hora = dt.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit',hour12:true}).toUpperCase();
+    return fecha+' '+hora;
+  }
+  function fmtNum(v,dec){
+    const n=parseFloat(v);
+    return isNaN(n) ? v : n.toFixed(dec==null?1:dec);
+  }
+  function fmtUSD(v){
+    const n=Number(v);
+    return isNaN(n) ? v : 'US$ '+n.toLocaleString('es-PE',{maximumFractionDigits:2});
+  }
+  function dotEstado(v){
+    const s=String(v||'').toLowerCase();
+    if(s.includes('crít')||s.includes('critic')||s.includes('alto')) return '🔴';
+    if(s.includes('prevent')||s.includes('advert')||s.includes('medio')) return '🟡';
+    return '🟢';
+  }
+
   if(key==='climaguard'){
     if(d.temperatura!=null){S.temp=parseFloat(d.temperatura)||S.temp;}
     // ██ CONEXIÓN API — ClimaGuard: temperatura, temp_max_24h, precipitacion_mm, alerta, recomendacion_ia ██
-    const precip = d.precipitacion_mm!=null ? ' · Lluvia: '+d.precipitacion_mm+'mm' : '';
-    const tmax = d.temp_max_24h!=null ? ' (máx 24h: '+d.temp_max_24h+'°C)' : '';
-    set('a-clim-1','Temp: '+S.temp+'°C'+tmax);
-    set('a-clim-2','Alerta: '+(d.alerta||'Normal')+precip);
-    const ht=document.getElementById('h-temp');if(ht){ht.textContent=S.temp+'°C';ht.style.color=S.temp>34?'#dc2626':S.temp>30?'#d97706':'#0284c7';}
-    if(d.recomendacion_ia) pushIA('🌡','ClimaGuard AI','#0369a1',d.recomendacion_ia);
+    const precip = d.precipitacion_mm!=null ? ' · 🌧 Precipitación: '+fmtNum(d.precipitacion_mm,1)+' mm' : '';
+    const tmax = d.temp_max_24h!=null ? ' · ☀ Máx. 24h: '+fmtNum(d.temp_max_24h,1)+' °C' : '';
+    set('a-clim-1','🌡 Temperatura: '+fmtNum(S.temp,1)+' °C'+tmax);
+    set('a-clim-2', dotEstado(d.alerta)+' 🚨 Estado: '+(d.alerta||'Normal')+precip);
+    const ht=document.getElementById('h-temp');if(ht){ht.textContent=fmtNum(S.temp,1)+'°C';ht.style.color=S.temp>34?'#dc2626':S.temp>30?'#d97706':'#0284c7';}
+    if(d.recomendacion_ia) pushIA('🤖','ClimaGuard AI','#0369a1','Recomendación IA: '+d.recomendacion_ia);
   }
   if(key==='aquafert'){
     // ██ CONEXIÓN API — AquaFert: ahorro_hidrico_pct, sensores_activos, humedad_suelo_pct ██
-    const humedad = d.humedad_suelo_pct!=null ? ' · Humedad suelo: '+d.humedad_suelo_pct+'%' : '';
-    set('a-aqua-1','Ahorro: −'+(d.ahorro_hidrico_pct||18)+'%');
-    set('a-aqua-2','IoT: '+(d.sensores_activos||4)+'/24'+humedad);
-    if(d.recomendacion_ia) pushIA('💧','AquaFert AI','#059669',d.recomendacion_ia);
+    const humedad = d.humedad_suelo_pct!=null ? ' · Humedad suelo: '+fmtNum(d.humedad_suelo_pct,0)+' %' : '';
+    set('a-aqua-1','💧 Ahorro de agua: −'+fmtNum(d.ahorro_hidrico_pct??18,0)+' %');
+    set('a-aqua-2','📡 Sensores IoT: '+(d.sensores_activos||4)+'/24'+humedad);
+    if(d.recomendacion_ia) pushIA('🤖','AquaFert AI','#059669','Recomendación IA: '+d.recomendacion_ia);
   }
   if(key==='coldchain'){
     // ██ CONEXIÓN API — ColdChain: eta_dias, progreso_pct, temp_contenedor, puerto ██
     if(d.eta_dias!=null){
-      const tempCont = d.temp_contenedor!=null ? ' · '+d.temp_contenedor+'°C' : '';
-      set('a-cold-2','ETA: '+(d.eta_dias||15)+' días'+tempCont);
+      const tempCont = d.temp_contenedor!=null ? ' · 🌡 '+fmtNum(d.temp_contenedor,1)+' °C' : '';
+      set('a-cold-2','🚢 ETA: '+(d.eta_dias||15)+' días'+tempCont);
       const sf=document.getElementById('ship-bar');if(sf)sf.style.width=(d.progreso_pct||58)+'%';
       const eta=document.getElementById('ship-eta');if(eta)eta.textContent='ETA: '+(d.eta_dias||15)+' días';
     }
-    if(d.puerto) set('a-cold-1',d.puerto+' ✓');
-    if(d.recomendacion_ia||d.recomendacion) pushIA('🚢','ColdChain AI','#4f46e5',d.recomendacion_ia||d.recomendacion);
+    if(d.puerto) set('a-cold-1','⚓ '+d.puerto+' ✓');
+    if(d.recomendacion_ia||d.recomendacion) pushIA('🤖','ColdChain AI','#4f46e5','Recomendación IA: '+(d.recomendacion_ia||d.recomendacion));
   }
   if(key==='teamgrow'){
     // ██ CONEXIÓN API — TeamGrow: total_trabajadores, academia_pct, productividad_pct ██
-    const productividad = d.productividad_pct!=null ? ' · Product: '+d.productividad_pct+'%' : '';
-    set('a-team-1','Trabaj: '+(d.total_trabajadores||220));
-    set('a-team-2','Academia: '+(d.academia_pct||68)+'%'+productividad);
-    if(d.recomendacion_ia) pushIA('👥','TeamGrow AI','#d97706',d.recomendacion_ia);
+    const productividad = d.productividad_pct!=null ? ' · 📈 Productividad: '+fmtNum(d.productividad_pct,0)+' %' : '';
+    set('a-team-1','👥 Trabajadores: '+(d.total_trabajadores||220));
+    set('a-team-2','🎓 Academia: '+fmtNum(d.academia_pct??68,0)+' %'+productividad);
+    if(d.recomendacion_ia) pushIA('🤖','TeamGrow AI','#d97706','Recomendación IA: '+d.recomendacion_ia);
   }
   if(key==='variety'){
     // ██ CONEXIÓN API — VarietyMaster: calidad_estimada_pct, precio_fob_kg, lote_activo, recomendacion_ia ██
-    if(d.calidad_estimada_pct!=null){S.quality=parseFloat(d.calidad_estimada_pct)||70;set('a-var-2','Calidad: '+Math.round(S.quality)+'%');}
-    if(d.precio_fob_kg!=null){S.fob=parseFloat(d.precio_fob_kg)||3.82;const hs=document.getElementById('h-spot');if(hs)hs.textContent='$'+S.fob.toFixed(2)+'/kg';}
-    if(d.lote_activo) set('a-var-1','Lote: '+d.lote_activo);
-    if(d.recomendacion_ia) pushIA('🧬','VarietyMaster AI','#7c3aed',d.recomendacion_ia);
+    if(d.calidad_estimada_pct!=null){S.quality=parseFloat(d.calidad_estimada_pct)||70;set('a-var-2','🍇 Calidad estimada: '+fmtNum(S.quality,0)+' %');}
+    if(d.precio_fob_kg!=null){S.fob=parseFloat(d.precio_fob_kg)||3.82;const hs=document.getElementById('h-spot');if(hs)hs.textContent='US$ '+S.fob.toFixed(2)+'/kg';}
+    if(d.lote_activo) set('a-var-1','🌱 Lote activo: '+d.lote_activo);
+    if(d.recomendacion_ia) pushIA('🤖','VarietyMaster AI','#7c3aed','Recomendación IA: '+d.recomendacion_ia);
   }
   if(key==='sales'){
     // ██ CONEXIÓN API — SalesPilot: ventas_totales, pedidos_activos, conversion_pct, ingresos_usd ██
-    const pedidos = d.pedidos_activos!=null ? ' · Pedidos: '+d.pedidos_activos : '';
-    if(d.ventas_totales!=null) set('a-sales-1','Ventas: '+d.ventas_totales+pedidos);
-    const ingresos = d.ingresos_usd!=null ? ' · $'+Number(d.ingresos_usd).toLocaleString('es-PE') : '';
-    if(d.conversion_pct!=null) set('a-sales-2','Conversión: '+d.conversion_pct+'%'+ingresos);
-    if(d.recomendacion_ia) pushIA('📈','SalesPilot AI','#7c3aed',d.recomendacion_ia);
+    const pedidos = d.pedidos_activos!=null ? ' · 📦 Pedidos activos: '+d.pedidos_activos : '';
+    if(d.ventas_totales!=null) set('a-sales-1','💵 Ventas: '+d.ventas_totales+pedidos);
+    const ingresos = d.ingresos_usd!=null ? ' · 💵 Ingresos: '+fmtUSD(d.ingresos_usd) : '';
+    if(d.conversion_pct!=null) set('a-sales-2','🎯 Conversión: '+fmtNum(d.conversion_pct,0)+' %'+ingresos);
+    if(d.recomendacion_ia) pushIA('🤖','SalesPilot AI','#7c3aed','Recomendación IA: '+d.recomendacion_ia);
   }
   if(key==='customer'){
     // ██ CONEXIÓN API — CustomerCare: nps, reclamos_abiertos, tiempo_respuesta_hrs, clientes_fidelizados ██
     const fidelizados = d.clientes_fidelizados!=null ? ' · Fieles: '+d.clientes_fidelizados : '';
-    if(d.nps!=null) set('a-cust-1','NPS: '+d.nps+fidelizados);
-    const resp = d.tiempo_respuesta_hrs!=null ? ' · Resp: '+d.tiempo_respuesta_hrs+'h' : '';
-    if(d.reclamos_abiertos!=null) set('a-cust-2','Reclamos: '+d.reclamos_abiertos+resp);
-    if(d.recomendacion_ia) pushIA('💬','CustomerCare AI','#0891b2',d.recomendacion_ia);
+    if(d.nps!=null) set('a-cust-1','😊 NPS: '+d.nps+fidelizados);
+    const resp = d.tiempo_respuesta_hrs!=null ? ' · ⏱ Resp.: '+fmtNum(d.tiempo_respuesta_hrs,1)+' h' : '';
+    if(d.reclamos_abiertos!=null) set('a-cust-2','⚠ Reclamos: '+d.reclamos_abiertos+resp);
+    if(d.recomendacion_ia) pushIA('🤖','CustomerCare AI','#0891b2','Recomendación IA: '+d.recomendacion_ia);
   }
   if(key==='orquestador'){
     // ██ CONEXIÓN API — Orquestador: margen_neto_pct, agentes_activos, estado_sistema, total_alertas, resumen_ceo ██
-    if(d.margen_neto_pct!=null){S.margin=parseFloat(d.margen_neto_pct)||S.margin;set('h-mg',S.margin.toFixed(1)+'%');set('dyn-mg',S.margin.toFixed(1)+'%');}
+    if(d.margen_neto_pct!=null){S.margin=parseFloat(d.margen_neto_pct)||S.margin;set('h-mg',fmtNum(S.margin,1)+'%');set('dyn-mg',fmtNum(S.margin,1)+'%');}
     if(d.agentes_activos){set('ag-badge',d.agentes_activos+' Activos');set('h-ag',d.agentes_activos);}
     const resumen = d.resumen_ceo||d['resumen ceo'];
     if(resumen){
       const card=document.getElementById('ceo-card');if(card)card.style.display='block';
-      const txt=document.getElementById('ceo-txt');if(txt)txt.textContent=String(resumen).replace(/\*\*/g,'');
-      const time=document.getElementById('ceo-time');if(time)time.textContent='Generado: '+new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+' · Groq Llama 3.3';
-      const est=document.getElementById('ceo-estado');if(est){est.textContent=d.estado_sistema||'OPERATIVO';est.style.color=d.estado_sistema==='CRÍTICO'?'#dc2626':d.estado_sistema==='ADVERTENCIA'?'#d97706':'#059669';}
-      const mg=document.getElementById('ceo-margen');if(mg)mg.textContent=(d.margen_neto_pct||S.margin)+'%';
+      const txt=document.getElementById('ceo-txt');if(txt)txt.textContent='🤖 Recomendación IA: '+String(resumen).replace(/\*\*/g,'');
+      const time=document.getElementById('ceo-time');
+      if(time){
+        const fechaTxt = d.timestamp ? fmtFecha(d.timestamp) : new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+        time.textContent='🕒 Última actualización: '+fechaTxt+' · Groq Llama 3.3';
+      }
+      const est=document.getElementById('ceo-estado');if(est){est.textContent=dotEstado(d.estado_sistema)+' '+(d.estado_sistema||'OPERATIVO');est.style.color=d.estado_sistema==='CRÍTICO'?'#dc2626':d.estado_sistema==='ADVERTENCIA'?'#d97706':'#059669';}
+      const mg=document.getElementById('ceo-margen');if(mg)mg.textContent=fmtNum(d.margen_neto_pct||S.margin,1)+'%';
       const alt=document.getElementById('ceo-alertas');if(alt)alt.textContent=d.total_alertas||0;
-      pushIA('🎯','Orquestador General','#0284c7',resumen);
+      pushIA('🎯','Orquestador General','#0284c7','Recomendación IA: '+resumen);
     }
-    set('orch-mg',(d.margen_neto_pct||S.margin)+'%');
-    set('orch-estado',d.estado_sistema||'OPERATIVO');
+    set('orch-mg',fmtNum(d.margen_neto_pct||S.margin,1)+'%');
+    set('orch-estado',dotEstado(d.estado_sistema)+' '+(d.estado_sistema||'OPERATIVO'));
   }
 }
 
